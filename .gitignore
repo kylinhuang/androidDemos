@@ -38,3 +38,5 @@ main/build.gradle.model.bak.new.new
 
 .externalNativeBuild/
 
+gradlew
+gradlew.bat
