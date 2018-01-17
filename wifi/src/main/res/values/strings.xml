@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">wifi</string>
+
+
+    <string name="enable_wifi">Open Wifi</string>
+    <string name="get_wifi_info">Get Wifi </string>
+
+    <string name="scan_wifi_name">Name: %s</string>
+    <string name="scan_wifi_level">Level: %s</string>
+
+    <string name="close_wifi">close wifi</string>
+</resources>
