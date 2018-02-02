@@ -1,1 +1,1 @@
-include ':app', ':wifi'
+include ':app', ':wifi', ':screenshots', ':notification', ':easypermissions'

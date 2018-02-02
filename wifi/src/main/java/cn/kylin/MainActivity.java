@@ -11,6 +11,7 @@ import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.widget.LinearLayoutManager;
@@ -29,22 +30,20 @@ import java.util.TreeMap;
 public class MainActivity extends Activity implements View.OnClickListener {
 
     private WifiManager mWifiManager;
+    private Handler mMainHandler;
     private boolean mHasPermission;
-
-    Button mGetWifiInfoButton;
-    RecyclerView mWifiInfoRecyclerView;
-
-    private List<ScanResult> mScanResultList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mWifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        mWifiManager = (WifiManager)getSystemService(WIFI_SERVICE);
+        mMainHandler = new Handler();
 
-        initView();
+        findChildViews();
 
+        configChildViews();
 
         mHasPermission = checkPermission();
         if (!mHasPermission) {
@@ -52,18 +51,54 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
     }
 
-    private void initView() {
-        findViewById(R.id.open_wifi).setOnClickListener(this);
-        findViewById(R.id.close_wifi).setOnClickListener(this);
+    Button mOpenWifiButton;
+    Button mGetWifiInfoButton;
+    RecyclerView mWifiInfoRecyclerView;
 
+    private void findChildViews() {
+        mOpenWifiButton = (Button)findViewById(R.id.open_wifi);
         mGetWifiInfoButton = (Button) findViewById(R.id.get_wifi_info);
-        mGetWifiInfoButton.setOnClickListener(this);
-
         mWifiInfoRecyclerView = (RecyclerView) findViewById(R.id.wifi_info_detail);
-        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
-        mWifiInfoRecyclerView.setLayoutManager(linearLayoutManager);
-        mWifiInfoRecyclerView.setAdapter(new ScanResultAdapter());
+    }
 
+    private Runnable mMainRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mWifiManager.isWifiEnabled()) {
+                mGetWifiInfoButton.setEnabled(true);
+            } else {
+                mMainHandler.postDelayed(mMainRunnable, 1000);
+            }
+        }
+    };
+
+    private List<ScanResult> mScanResultList;
+
+    private void configChildViews() {
+        mOpenWifiButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!mWifiManager.isWifiEnabled()) {
+                    mWifiManager.setWifiEnabled(true);
+                    mMainHandler.post(mMainRunnable);
+                }
+            }
+        });
+
+        mGetWifiInfoButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mWifiManager.isWifiEnabled()) {
+                    mScanResultList = mWifiManager.getScanResults();
+                    sortList(mScanResultList);
+                    mWifiInfoRecyclerView.getAdapter().notifyDataSetChanged();
+                }
+            }
+        });
+
+        mWifiInfoRecyclerView.setLayoutManager(
+                new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
+        mWifiInfoRecyclerView.setAdapter(new ScanResultAdapter());
     }
 
     private void sortList(List<ScanResult> list) {
@@ -77,42 +112,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     @Override
     public void onClick(View v) {
-        switch (v.getId()) {
-            case R.id.open_wifi:
-                if (!mWifiManager.isWifiEnabled()) {
-                    boolean result = mWifiManager.setWifiEnabled(true);
-                    if (result) {
-                        mGetWifiInfoButton.setEnabled(true);
-                    } else {
-                        mGetWifiInfoButton.setEnabled(false);
-                    }
-                }
-                break;
-            case R.id.close_wifi:
-                if (!mWifiManager.isWifiEnabled()) {
-                    boolean result = mWifiManager.setWifiEnabled(false);
-                    if (result) {
-                        mGetWifiInfoButton.setEnabled(false);
-                    } else {
-                        mGetWifiInfoButton.setEnabled(true);
-                    }
-                }
-                break;
-            case R.id.get_wifi_info:
-                if (mWifiManager.isWifiEnabled()) {
-                    mScanResultList = mWifiManager.getScanResults();
-                    sortList(mScanResultList);
-                    mWifiInfoRecyclerView.getAdapter().notifyDataSetChanged();
-                }
-                break;
-
-
-        }
 
     }
 
     private class ScanResultViewHolder extends RecyclerView.ViewHolder {
-        private TextView mWifiCapabilities;
         private View mView;
         private TextView mWifiName;
         private TextView mWifiLevel;
@@ -123,38 +126,22 @@ public class MainActivity extends Activity implements View.OnClickListener {
             mView = itemView;
             mWifiName = (TextView) itemView.findViewById(R.id.ssid);
             mWifiLevel = (TextView) itemView.findViewById(R.id.level);
-            mWifiCapabilities = (TextView) itemView.findViewById(R.id.capabilities);
-
         }
 
         void bindScanResult(final ScanResult scanResult) {
-            mWifiName.setText(scanResult.SSID);
-            mWifiLevel.setText(String.valueOf(scanResult.level));
-
-            mWifiCapabilities.setText(scanResult.capabilities);
+            mWifiName.setText(
+                    getString(R.string.scan_wifi_name, "" + scanResult.SSID));
+            mWifiLevel.setText(
+                    getString(R.string.scan_wifi_level, "" + scanResult.level));
 
             mView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    boolean wpa = scanResult.capabilities.contains("WPA-PSK");
-                    boolean wpa2 = scanResult.capabilities.contains("WPA2-PSK");
-
-                    if (wpa || wpa2){
-                        //
-
-
-                    }else {
-                        int netId = mWifiManager.addNetwork(createWifiConfig(scanResult.SSID, "", WIFICIPHER_NOPASS));
-                        boolean enable = mWifiManager.enableNetwork(netId, true);
-                        Log.d(" wifi ", "enable: " + enable);
-
-                        boolean reconnect = mWifiManager.reconnect();
-                        Log.d(" wifi ", " reconnect: " + reconnect);
-                    }
-
-
-
-
+                    int netId = mWifiManager.addNetwork(createWifiConfig(scanResult.SSID, "", WIFICIPHER_NOPASS));
+                    boolean enable = mWifiManager.enableNetwork(netId, true);
+                    Log.d("ZJTest", "enable: " + enable);
+                    boolean reconnect = mWifiManager.reconnect();
+                    Log.d("ZJTest", "reconnect: " + reconnect);
                 }
             });
         }
@@ -174,21 +161,21 @@ public class MainActivity extends Activity implements View.OnClickListener {
         config.SSID = "\"" + ssid + "\"";
 
         WifiConfiguration tempConfig = isExist(ssid);
-        if (tempConfig != null) {
+        if(tempConfig != null) {
             mWifiManager.removeNetwork(tempConfig.networkId);
         }
 
-        if (type == WIFICIPHER_NOPASS) {
+        if(type == WIFICIPHER_NOPASS) {
             config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-        } else if (type == WIFICIPHER_WEP) {
+        } else if(type == WIFICIPHER_WEP) {
             config.hiddenSSID = true;
-            config.wepKeys[0] = "\"" + password + "\"";
+            config.wepKeys[0]= "\""+password+"\"";
             config.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.OPEN);
             config.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.SHARED);
             config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
             config.wepTxKeyIndex = 0;
-        } else if (type == WIFICIPHER_WPA) {
-            config.preSharedKey = "\"" + password + "\"";
+        } else if(type == WIFICIPHER_WPA) {
+            config.preSharedKey = "\""+password+"\"";
             config.hiddenSSID = true;
             config.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.OPEN);
             config.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
@@ -204,12 +191,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     private WifiConfiguration isExist(String ssid) {
         List<WifiConfiguration> configs = mWifiManager.getConfiguredNetworks();
-        for (WifiConfiguration config : configs) {
-            mWifiManager.disableNetwork(config.networkId);
-        }
 
         for (WifiConfiguration config : configs) {
-            if (config.SSID.equals("\"" + ssid + "\"")) {
+            if (config.SSID.equals("\""+ssid+"\"")) {
                 return config;
             }
         }
@@ -242,7 +226,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
     }
 
-    private static final String[] NEEDED_PERMISSIONS = new String[]{
+    private static final String[] NEEDED_PERMISSIONS = new String[] {
             Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.ACCESS_FINE_LOCATION
     };
@@ -313,7 +297,6 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private BroadcastReceiver mBroadcastReceiver;
-
     private void registerBroadcastReceiver() {
         mBroadcastReceiver = new BroadcastReceiver() {
             @Override
